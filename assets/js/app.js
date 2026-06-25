@@ -1,312 +1,222 @@
-const cl = console.log
 
-const spinner = document.getElementById('spinner')
-const BASE_URL = `https://jsonplaceholder.typicode.com`
+const postform = document.getElementById('postform');
+const titlecontrol = document.getElementById('title');
+const bodycontrol = document.getElementById('body');
+const userIdcontrol = document.getElementById('userId');
+const addpost = document.getElementById('addpost');
+const updatepost = document.getElementById('updatepost');
+const postcontainer = document.getElementById('postcontainer');
+const spinner = document.getElementById('spinner');
 
-const POST_URL = `${BASE_URL}/posts`
+let postArr = [];
+let base_url = 'https://jsonplaceholder.typicode.com/posts';
 
-const postForm = document.getElementById('postForm')
-const titleControl = document.getElementById('title')
-const bodyControl = document.getElementById('body')
-const userIdControl = document.getElementById('userId')
-const addPostBtn = document.getElementById('addPostBtn')
-const updatePostBtn = document.getElementById('updatePostBtn')
 
-let postsArr = []
-let updateId = null
+function initTooltips() {
+    $('[data-toggle="tooltip"]').tooltip({ boundary: 'window' });
+}
 
-function snackbar (msg, icon) {
+function snackbar(msg, icon) {
     Swal.fire({
         title: msg,
-        icon: icon,
+        icon: icon || 'success',
         timer: 3000
-    })
-}
-
-function createPostCards(arr) {
-
-    const postContainer = document.getElementById('postContainer')
-
-    let result = ''
-
-    arr.forEach(post => {
-
-        result += `
-            <div class="col-md-3 mb-3" id="${post.id}">
-
-                <div class="card post-card h-100">
-
-                    <div class="card-header">
-                        <h3>
-                           ${post.title}
-                        </h3>
-                    </div>
-
-                    <div class="card-body">
-                        <p>
-                            ${post.body}
-                        </p>
-                    </div>
-
-                    <div class="card-footer d-flex justify-content-between">
-
-                        <button
-                            onclick="onEdit(this)"
-                            class="btn btn-sm btn-outline-info"
-                        >
-                            Edit
-                        </button>
-
-                        <button
-                            onclick="onRemove(this)"
-                            class="btn btn-sm btn-outline-danger"
-                        >
-                            Remove
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-        `
-    })
-
-    postContainer.innerHTML = result
+    });
 }
 
 
-// methodName, API_URL, body = null , successCb, errorCb
-
-function makeApiCall(methodName, API_URL, body = null, successCb, errorCb) {
-
-    spinner.classList.remove('d-none')
-
-    body = body ? JSON.stringify(body) : null
-
-    let xhr = new XMLHttpRequest()
-
-    xhr.open(methodName, API_URL)
-
-    xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8')
-
-    xhr.send(body)
-
+function makeapicall(methodName, api_url, body = null, successcb, errorcb) {
+    spinner.classList.remove('d-none');
+    body = body ? JSON.stringify(body) : null;
+    let xhr = new XMLHttpRequest();
+    xhr.open(methodName, api_url);
+    xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+    xhr.send(body);
+    
     xhr.onload = function () {
-
         if (xhr.status >= 200 && xhr.status <= 299) {
-
-            let res = xhr.response ? JSON.parse(xhr.response) : {}
-
+            let res = xhr.response ? JSON.parse(xhr.response) : {};
             if (methodName === 'GET') {
-
-                if (Array.isArray(res)) {
-                    successCb(res.reverse())
-                } else {
-                    successCb(res)
-                }
-
+                successcb(res);
             } else if (methodName === 'POST') {
-
-                let obj = { ...JSON.parse(body), id: res.id }
-                successCb(obj)
-
-            } else if (methodName === 'PATCH') {
-
-                let obj = { ...JSON.parse(body), id: res.id }
-                successCb(obj)
-
-            } else if (methodName === 'DELETE') {
-
-                successCb()
+                let obj = { ...JSON.parse(body), id: res.id };
+                successcb(obj);
+            } else if (methodName === 'PATCH' || methodName === 'PUT') {
+                successcb(JSON.parse(body));
+            } else {
+                successcb();
             }
-
         } else {
-            errorCb('Something went wrong', 'error')
+            errorcb('Something went wrong!', 'error');
         }
-         
-        spinner.classList.add('d-none')
+        spinner.classList.add('d-none');
+    };
+    
+    xhr.onerror = function () {
+        spinner.classList.add('d-none');
+        errorcb('Network Error!', 'error');
+    };
+}
+
+// Reusable Template Engine for Cards
+function cardTemplate(p) {
+    return `
+        <div class="card border-dark mb-3 h-100 shadow-sm post-card-item">
+            <div class="card-header bg-white">
+                <h5 class="card-title-text text-capitalize mb-0" data-toggle="tooltip" title="${p.title}">${p.title}</h5>
+            </div>
+            <div class="card-body text-dark">
+                <p class="card-text">${p.body}</p>
+                <small class="text-muted d-block mt-2">User ID: <b>${p.userId}</b></small>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-between border-top-0">
+                <button class="btn btn-sm btn-warning px-3 font-weight-bold" onclick="onedit(this)">Edit</button>
+                <button class="btn btn-sm btn-danger px-3 font-weight-bold" onclick="onremove(this)">Remove</button>
+            </div>
+        </div>
+    `;
+}
+
+// 1. Initial Load (GET)
+function createcard(arr) {
+    postArr = Array.isArray(arr) ? arr : [arr];
+    let result = '';
+    postArr.forEach(p => {
+        result += `
+            <div class="col-xl-3 col-md-4 col-sm-6 col-12 mb-4" id="${p.id}">
+                ${cardTemplate(p)}
+            </div>
+        `;
+    });
+    postcontainer.innerHTML = result;
+    initTooltips();
+}
+
+// 2. Form Submit Handler (POST)
+function onsubmit(eve) {
+    eve.preventDefault();
+    let new_obj = {
+        title: titlecontrol.value,
+        userId: Number(userIdcontrol.value),
+        body: bodycontrol.value
+    };
+    makeapicall('POST', base_url, new_obj, createnewcard, snackbar);
+}
+
+function createnewcard(res) {
+    postArr.unshift(res);
+    let col = document.createElement('div');
+    col.className = 'col-xl-3 col-md-4 col-sm-6 col-12 mb-4';
+    col.id = res.id;
+    col.innerHTML = cardTemplate(res);
+    
+    postcontainer.prepend(col);
+    initTooltips();
+    snackbar(`The new card with ID ${res.id} is Added successfully`, 'success');
+    postform.reset();
+}
+
+
+function onedit(ele) {
+    let edit_id = ele.closest('.mb-4').id;
+    localStorage.setItem('edit_id', edit_id);
+    
+    let localpost = postArr.find(p => p.id == edit_id);
+    if (localpost) {
+        postedit(localpost);
+        return;
+    }
+
+    let edit_url = `${base_url}/${edit_id}`;
+    makeapicall('GET', edit_url, null, postedit, snackbar);
+}
+
+function postedit(edit_obj) {
+    titlecontrol.value = edit_obj.title;
+    userIdcontrol.value = edit_obj.userId;
+    bodycontrol.value = edit_obj.body;
+    
+    addpost.classList.add('d-none');
+    updatepost.classList.remove('d-none');
+    
+    
+    postform.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+
+function onupdate() {
+    let update_id = localStorage.getItem('edit_id');
+    let update_url = `${base_url}/${update_id}`;
+    let update_obj = {
+        title: titlecontrol.value,
+        userId: Number(userIdcontrol.value),
+        body: bodycontrol.value,
+        id: Number(update_id) || update_id
+    };
+    
+    makeapicall('PATCH', update_url, update_obj, updatepostcard, snackbar);
+}
+
+function updatepostcard(update_obj) {
+    let card = document.getElementById(update_obj.id);
+    let index = postArr.findIndex(p => p.id == update_obj.id);
+    if (index !== -1) {
+        postArr[index] = update_obj;
     }
     
-
-    xhr.onerror = function () {
-        errorCb('Something went wrong', 'error') 
-        spinner.classList.add('d-none')
+    if (card) {
+        card.innerHTML = cardTemplate(update_obj);
+        card.scrollIntoView({behavior: 'smooth', block: 'center'});
+        card.classList.add('highlight');
+        setTimeout(() => {
+            card.classList.remove('highlight')
+        }, 3000)
     }
+    
+    initTooltips();
+    snackbar(`The post with id ${update_obj.id} is updated successfully`, 'success');
+    postform.reset();
+    localStorage.removeItem('edit_id');
+
+    addpost.classList.remove('d-none');
+    updatepost.classList.add('d-none');
 }
 
 
-// READ >> GET 
-makeApiCall('GET', POST_URL, null, createPostCards, snackbar)
-
-
-function onPostSubmit (eve) {
-
-    eve.preventDefault()
-
-     if (
-        titleControl.value.trim() === '' ||
-        bodyControl.value.trim() === '' ||
-        userIdControl.value.trim() === ''
-    ) {
-
-        snackbar('All fields are required !!!', 'error')
-        return
-    }
-
-    let POST_OBJ = {
-        title: titleControl.value,
-        userId: userIdControl.value,
-        body: bodyControl.value
-    }
-
-    makeApiCall('POST', POST_URL, POST_OBJ, createSingleCard, snackbar)
-}
-
-
-function createSingleCard(res) {
-
-    let col = document.createElement('div')
-
-    col.className = 'col-md-3 mb-3'
-    col.id = res.id
-
-    col.innerHTML = `
-        <div class="card post-card h-100">
-
-            <div class="card-header">
-                <h3>${res.title}</h3>
-            </div>
-
-            <div class="card-body">
-                <p>
-                    ${res.body}
-                </p>
-            </div>
-
-            <div class="card-footer d-flex justify-content-between">
-
-                <button
-                    onclick="onEdit(this)"
-                    class="btn btn-sm btn-outline-primary"
-                >
-                    Edit
-                </button>
-
-                <button
-                    onclick="onRemove(this)"
-                    class="btn btn-sm btn-outline-danger"
-                >
-                    Remove
-                </button>
-
-            </div>
-
-        </div>
-    `
-
-    const postContainer = document.getElementById('postContainer')
-
-    postContainer.prepend(col)
- 
-    postForm.reset()
-
-    snackbar(`Post with id ${res.id} created successfully !!!`, 'success')
-}
-
-function onEdit(ele) {
-
-    updateId = ele.closest('.col-md-3').id
-
-    let EDIT_URL = `${BASE_URL}/posts/${updateId}`
-
-    makeApiCall('GET', EDIT_URL, null, editCallBack, snackbar)
-}
-
-function editCallBack(res) {
-
-    titleControl.value = res.title
-    bodyControl.value = res.body
-    userIdControl.value = res.userId
-
-    addPostBtn.classList.add('d-none')
-    updatePostBtn.classList.remove('d-none')
-}
-
-function onPostUpdate() {
-
-    if (
-        titleControl.value.trim() === '' ||
-        bodyControl.value.trim() === '' ||
-        userIdControl.value.trim() === ''
-    ) {
-
-        snackbar('All fields are required !!!', 'error')
-        return
-    }
-
-    let UPDATE_OBJ = {
-        title: titleControl.value,
-        userId: userIdControl.value,
-        body: bodyControl.value
-    }
-
-    let UPDATE_URL = `${BASE_URL}/posts/${updateId}`
-
-    makeApiCall('PATCH', UPDATE_URL, UPDATE_OBJ, updateCallBack, snackbar)
-}
-
-function updateCallBack(res) {
-
-    let card = document.getElementById(updateId)
-
-    card.querySelector('h3').innerHTML = res.title
-    card.querySelector('p').innerHTML = res.body
-
-    postForm.reset()
-
-    updateId = null
-
-    addPostBtn.classList.remove('d-none')
-    updatePostBtn.classList.add('d-none')
-
-    snackbar('Post updated successfully !!!', 'success')
-}
-
-function removeCallBack () {
-
-    let REMOVE_ID = localStorage.getItem('REMOVE_ID')
-
-    document.getElementById(REMOVE_ID).remove()
-
-    localStorage.removeItem('REMOVE_ID')
-
-    snackbar('Post removed successfully !!!', 'success')
-}
-
-function onRemove (ele) {
-
-    let REMOVE_ID = ele.closest('.col-md-3').id
-
+function onremove(ele) {
+    let remove_id = ele.closest('.mb-4').id;
+    
     Swal.fire({
         title: 'Are you sure?',
-        text: 'Do you want to remove this post?',
+        text: "You won't be able to recover this post!",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Yes, Remove',
-        cancelButtonText: 'Cancel'
-    }).then(result => {
-
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
         if (result.isConfirmed) {
-
-            localStorage.setItem('REMOVE_ID', REMOVE_ID)
-
-            let REMOVE_URL = `${BASE_URL}/posts/${REMOVE_ID}`
-
-            makeApiCall('DELETE', REMOVE_URL, null, removeCallBack, snackbar)
+            localStorage.setItem('remove_id', remove_id);
+            let remove_url = `${base_url}/${remove_id}`;
+            makeapicall('DELETE', remove_url, null, removecallback, snackbar);
         }
-    })
+    });
 }
 
-postForm.addEventListener('submit', onPostSubmit)
-updatePostBtn.addEventListener('click', onPostUpdate)
+function removecallback() {
+    let remove_id = localStorage.getItem('remove_id');
+    let card = document.getElementById(remove_id);
+    if (card) {
+        card.remove();
+    }
+    
+    
+    postArr = postArr.filter(p => p.id != remove_id);
+    
+    snackbar(`The post with id ${remove_id} is deleted Successfully`, 'success');
+    localStorage.removeItem('remove_id');
+}
+
+
+makeapicall('GET', base_url, null, createcard, snackbar);
+
+postform.addEventListener('submit', onsubmit);
+updatepost.addEventListener('click', onupdate);
